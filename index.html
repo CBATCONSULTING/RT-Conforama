@@ -13,15 +13,15 @@ button:focus-visible,.filebtn:focus-within{outline:3px solid #f28c18;outline-off
 input,textarea,select,button,.sign{scroll-margin-top:110px}
 @media print{input:focus,textarea:focus,select:focus,.check:focus-within,.signature:focus-within .sign,.sign:focus{outline:none;box-shadow:none;background:white}.check:focus-within{padding-left:0;padding-right:0}label:focus-within{color:inherit}}
 </style>
-<header><small>CHALLENGE BAT · RELEVÉ TECHNIQUE</small><h1>Prévisite cuisine <span style="font-weight:400">/ Conforama</span></h1><p>Contrôler le projet. Repérer les écarts. Préparer la pose.</p><small style="letter-spacing:0">V1.4</small></header>
+<header><small>CHALLENGE BAT · RELEVÉ TECHNIQUE</small><h1>Prévisite cuisine <span style="font-weight:400">/ Conforama</span></h1><p>Contrôler le projet. Repérer les écarts. Préparer la pose.</p><small style="letter-spacing:0">V1.5</small></header>
 <main><nav><button onclick="go('client')">01 Client</button><button onclick="go('controls')">02 Contrôles</button><button onclick="go('validation')">03 Validation</button></nav>
 <div class="actions"><button class="primary" id="sendReport" onclick="sendReport()">Envoyer le compte rendu</button><button onclick="generatePdf()">Télécharger le PDF</button><button onclick="saveHTML()">Conserver un brouillon HTML</button><button onclick="newDossier()">Nouveau dossier vierge</button></div>
-<p class="hint">Les réponses sont conservées dans ce navigateur si celui-ci l’autorise. L’envoi nécessite une connexion Internet. Le PDF reprend les rubriques Conforama dans une mise en page nette ; les observations détaillées figurent en annexe.</p><p id="draftStatus" class="hint"></p><div id="msg" role="status" class="status">Dossier prêt à compléter.</div>
+<p class="hint">Les réponses sont conservées dans ce navigateur si celui-ci l’autorise. L’envoi nécessite une connexion Internet. Le PDF reprend la disposition Conforama sur une seule page. Les réponses « Sans objet » et « Non vérifié » sont inscrites sur la ligne correspondante.</p><p id="draftStatus" class="hint"></p><div id="msg" role="status" class="status">Dossier prêt à compléter.</div>
 <section id="client"><h2>01 / Client & intervention</h2><p class="hint">Un formulaire vierge pour chaque rendez-vous. Renseignez les coordonnées du client et les horaires de la visite.</p><div id="fields" class="grid"></div></section>
 
 <section id="controls"><h2>02 / Points de contrôle</h2><p class="hint">Chaque point doit recevoir une réponse. « Conforme » signifie ici conforme au projet fourni ; une observation technique complémentaire peut être ajoutée.</p><div id="progress" class="status"></div><div id="checks"></div></section>
 <section id="validation"><h2>03 / Commentaires & signatures</h2><div id="summary" class="status"></div><p class="hint">En cas de non-conformité entre le plan CAO et la réalité, les modifications doivent être indiquées sur le plan d’origine, à joindre séparément au compte rendu.</p><div class="grid"><label>Commentaires installateur<textarea data-field="installer"></textarea></label><label>Commentaires client<textarea data-field="customer"></textarea></label></div><h3>Validation sur place</h3><p class="hint">Relire les observations avec le client. La fiche fournie demande une mention manuscrite « lu et approuvé » : le client peut l’écrire dans sa zone de signature. Ces tracés ne constituent pas un service de signature électronique certifiée.</p><div class="grid"><div class="signature"><label>Client — mention et signature</label><canvas class="sign" tabindex="0" aria-label="Signature client" id="sigClient" width="900" height="300"></canvas><button class="noprint" onclick="clearSig('sigClient')">Effacer</button></div><div class="signature"><label>Installateur — signature</label><canvas class="sign" tabindex="0" aria-label="Signature installateur" id="sigTech" width="900" height="300"></canvas><button class="noprint" onclick="clearSig('sigTech')">Effacer</button></div></div><p id="validationMessage" class="hint"></p><button class="primary noprint" onclick="validateReport()">Vérifier le dossier</button></section>
-<footer>Compte rendu de prévisite cuisine · V1.4 · Documents et observations à transmettre selon votre circuit habituel.</footer></main>
+<footer>Compte rendu de prévisite cuisine · V1.5 · Documents et observations à transmettre selon votre circuit habituel.</footer></main>
 <script>!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"function"==typeof define&&define.amd?define(["exports"],e):e((t=t||self).PDFLib={})}(this,(function(t){"use strict";
 /*! *****************************************************************************
     Copyright (c) Microsoft Corporation. All rights reserved.
@@ -63,40 +63,37 @@ function textAt(ctx,text,x,y,w,size=12){ctx.font=size+'px Arial';ctx.fillStyle='
 function lines(ctx,text,width,size=12){ctx.font=size+'px Arial';const out=[];for(const para of String(text||'').split('\n')){let line='';for(const word of para.split(/\s+/)){if(ctx.measureText((line?line+' ':'')+word).width>width&&line){out.push(line);line=''}if(ctx.measureText(word).width>width){for(const ch of word){if(ctx.measureText(line+ch).width>width){out.push(line);line=''}line+=ch}}else line+=(line?' ':'')+word}out.push(line)}return out}
 function writeBlock(ctx,text,x,y,w,maxLines,size=11){const a=lines(ctx,text,w,size);a.slice(0,maxLines).forEach((l,i)=>textAt(ctx,l,x,y+i*(size+3),w,size));return a.length>maxLines}
 async function buildPdf(){
- const {PDFDocument,StandardFonts,rgb}=PDFLib;const pdf=await PDFDocument.create();const font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);const W=595.28,H=841.89;
- const ink=rgb(.12,.18,.22),muted=rgb(.38,.43,.46),line=rgb(.8,.84,.85),pale=rgb(.95,.96,.96),red=rgb(.78,.12,.17);let page;
- function clean(v){return String(v??'').replace(/[\u2010-\u2015]/g,'-').replace(/\u202f|\u00a0/g,' ').replace(/[^\x20-\x7e\xa0-\xff\n€ŒœŸ’‘“”•…]/g,'?')}
- function text(t,x,y,size=9,weight=false,color=ink){page.drawText(clean(t),{x,y:H-y-size,size,font:weight?bold:font,color})}
- function rect(x,y,w,h,fill=pale,border=null){page.drawRectangle({x,y:H-y-h,width:w,height:h,color:fill,...(border?{borderColor:border,borderWidth:.5}:{})})}
- function rule(x,y,w){page.drawLine({start:{x,y:H-y},end:{x:x+w,y:H-y},color:line,thickness:.5})}
- function wrap(t,width,size=8.5){let out=[];for(const para of clean(t).split('\n')){let l='';for(const word of para.split(/\s+/)){if(font.widthOfTextAtSize((l?l+' ':'')+word,size)>width&&l){out.push(l);l=''}for(const ch of (l?' ':'')+word){if(font.widthOfTextAtSize(l+ch,size)>width){out.push(l);l=''}l+=ch}}out.push(l)}return out}
- function block(t,x,y,width,max,size=8.5){const a=wrap(t,width,size);a.slice(0,max).forEach((l,i)=>text(l,x,y+i*(size+3),size));return a.length>max}
- function fit(t,x,y,width,size=9){let val=clean(t);while(font.widthOfTextAtSize(val,size)>width&&size>7)size-=.25;while(font.widthOfTextAtSize(val,size)>width)val=val.slice(0,-2)+'…';text(val,x,y,size)}
- function title(n,t,y){rect(30,y,535,23,ink);text(n,39,y+6,9,true,rgb(1,1,1));text(t,63,y+6,9,true,rgb(1,1,1))}
- function footer(num){rule(30,812,535);text('CHALLENGE BAT  /  Compte rendu de prévisite cuisine',30,820,7,false,muted);text(String(num),552,820,7,false,muted)}
- function date(v){return /^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.split('-').reverse().join('/'):v||''}
- const f=s.fields;page=pdf.addPage([W,H]);text('Conforama',30,25,23,true,red);text('COMPTE RENDU DE PRÉVISITE',268,27,14,true);text('CUISINE',268,46,12,false,muted);rule(30,73,535);
- function field(label,value,x,y,width){text(label,x,y,7,true,muted);fit(value||'—',x,y+12,width,9)}
- field('CLIENT',f.name,30,86,290);field('DATE DE VISITE',date(f.date),353,86,100);field('HORAIRES',`${f.arrival||'—'} - ${f.departure||'—'}`,466,86,99);
- field('ADRESSE',`${f.address||''} ${f.city||''}`,30,122,535);field('TÉLÉPHONE',f.phone,30,158,145);field('E-MAIL',f.email,193,158,200);field('TECHNICIEN',f.tech,414,158,151);
- title('01','COHÉRENCE ENTRE LE PLAN CAO ET LA RÉALITÉ',198);
- const headers=(y)=>{rect(30,y,535,24,pale);text('POINTS DE CONTRÔLE',39,y+7,8,true);text('Conforme',400,y+4,7.5,true);text('au plan CAO',397,y+13,7);text('Non conforme',465,y+7,7.5,true)};
- headers(221);const flat=groups.flatMap(g=>g[1]);
- function row(label,i,y){if(i%2===0)rect(30,y,535,16,rgb(.98,.985,.985));text(label,39,y+4,8);for(const [value,x]of [['Conforme',417],['Non conforme',489]]){page.drawRectangle({x:x-3.5,y:H-y-11.5,width:7,height:7,borderColor:muted,borderWidth:.65});if(s.checks[i].status===value){page.drawLine({start:{x:x-2,y:H-y-6},end:{x:x+2,y:H-y-10},thickness:1,color:ink});page.drawLine({start:{x:x+2,y:H-y-6},end:{x:x-2,y:H-y-10},thickness:1,color:ink})}}rule(30,y+16,535)}
- for(let i=0;i<8;i++)row(flat[i],i,245+i*16);
- text('En cas de non-conformité, reporter les modifications sur le plan d’origine.',30,380,8,false,muted);
- title('02','CONFORMITÉ DES INSTALLATIONS TECHNIQUES',399);headers(422);
- let y=446,idx=8;const names=['ÉLECTRICITÉ','ARRIVÉES D’EAU','ÉVACUATIONS D’EAU','GAZ'];groups.slice(1).forEach(([label,items],g)=>{items.forEach((item,k)=>{row((k===0?names[g]+'  /  ':'')+item,idx,y);idx++;y+=16})});
- title('03','OBSERVATIONS ET VALIDATION',650);
- text('COMMENTAIRES INSTALLATEUR',39,682,8,true);text('COMMENTAIRES CLIENT',309,682,8,true);page.drawRectangle({x:30,y:H-746,width:263,height:52,borderColor:line,borderWidth:.5});page.drawRectangle({x:302,y:H-746,width:263,height:52,borderColor:line,borderWidth:.5});
- const obs=s.checks.map((a,i)=>({a,i})).filter(({a})=>a.status!=='Conforme'||a.note.trim());
- const installer=[f.installer||'',obs.length?`${obs.length} observation(s) détaillée(s) en annexe.`:''].filter(Boolean).join('\n');
- const overI=block(installer,39,699,245,3,8),overC=block(f.customer,311,699,245,3,8);
- text('CLIENT - « lu et approuvé » et signature',30,752,8,true);text('INSTALLATEUR - signature',310,752,8,true);text('Date : '+date(f.date),30,801,7,false,muted);
- for(const[id,x]of [['sigClient',30],['sigTech',310]])if(s.signatures[id]){const im=await pdf.embedPng(s.signatures[id]);page.drawImage(im,{x:x+35,y:H-798,width:108,height:36})}footer(1);
- const sections=[];if(f.reference||f.store||f.access)sections.push(['Références complémentaires',[f.reference?'Dossier : '+f.reference:'',f.store?'Magasin : '+f.store:'',f.access?'Accès : '+f.access:''].filter(Boolean).join('\n')]);if(obs.length)sections.push(['Observations des points de contrôle',obs.map(({a,i})=>`${i+1}. ${flat[i]} : ${a.status}${a.note?'\n'+a.note:''}`).join('\n\n')]);if(f.installer)sections.push(['Commentaires installateur',f.installer]);if(f.customer)sections.push(['Commentaires client',f.customer]);
- if(sections.length){let no=1,ay;function annex(){page=pdf.addPage([W,H]);no++;text('Conforama',30,25,20,true,red);text('ANNEXE À LA PRÉVISITE',290,31,12,true);text(`${f.name}  /  ${date(f.date)}`,30,63,9);rule(30,85,535);footer(no);ay=105}annex();for(const [label,body]of sections){if(ay>745)annex();text(label.toUpperCase(),30,ay,9,true);ay+=22;for(const l of wrap(body,535,9)){if(ay>782)annex();text(l,30,ay,9);ay+=13}ay+=20}}
- return new Blob([await pdf.save()],{type:'application/pdf'});
+ const {PDFDocument,StandardFonts,rgb}=PDFLib,pdf=await PDFDocument.create(),font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold),page=pdf.addPage([595.28,841.89]);const k=595.28/778,H=841.89,black=rgb(0,0,0),gray=rgb(.88,.88,.88);const f=s.fields;
+ const clean=v=>String(v??'').replace(/[\u2010-\u2015]/g,'-').replace(/\u202f|\u00a0/g,' ').replace(/[^\x20-\x7e\xa0-\xff\n€ŒœŸ’‘“”•…]/g,'?');
+ function t(v,x,y,size=12,b=false){page.drawText(clean(v),{x:x*k,y:H-(y+size)*k,size:size*k,font:b?bold:font,color:black})}
+ function rect(x,y,w,h,color,border=false){page.drawRectangle({x:x*k,y:H-(y+h)*k,width:w*k,height:h*k,color,...(border?{borderColor:black,borderWidth:.7*k}:{})})}
+ function ln(x,y,w,dotted=false){page.drawLine({start:{x:x*k,y:H-y*k},end:{x:(x+w)*k,y:H-y*k},thickness:.6*k,color:black,...(dotted?{dashArray:[1*k,2*k]}:{})})}
+ function fit(v,x,y,w,size=12){v=clean(v);while(font.widthOfTextAtSize(v,size)*k>w*k&&size>8)size-=.25;if(font.widthOfTextAtSize(v,size)>w)throw Error('Le texte « '+v.slice(0,30)+' » est trop long pour sa zone sur la fiche.');t(v,x,y,size)}
+ function wrap(v,w,size){let out=[];for(const para of clean(v).split('\n')){let line='';for(const word of para.split(/\s+/)){for(const ch of (line?' ':'')+word){if(font.widthOfTextAtSize(line+ch,size)>w){out.push(line);line=''}line+=ch}}out.push(line)}return out}
+ function comment(v,x,y,w,h,label){let size=11,a;for(;size>=7;size-=.25){a=wrap(v,w,size);if(a.length*(size+2)<=h)break}if(size<7)throw Error(label+' trop longs pour une seule page. Raccourcissez les observations ; aucune information ne sera supprimée.');a.forEach((l,i)=>t(l,x,y+i*(size+2),size))}
+ const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.split('-').reverse().join('/'):v||'';
+ // Fidèle au gabarit : titre, bandeau et contenu sont dessinés en vectoriel.
+ t('Conforama',22,25,42,true);ln(22,128,550);page.drawSvgPath('M 540 0 L 778 0 L 778 105 L 661 195 L 540 80 Z',{x:0,y:H,color:rgb(.1,.1,.1),scale:k});
+ function white(v,x,y,size){page.drawText(v,{x:x*k,y:H-(y+size)*k,size:size*k,font:bold,color:rgb(1,1,1)})}
+ white('COMPTE-RENDU',585,18,15);white('PRÉ-VISITE',565,39,27);white('CUISINE',620,70,27);
+ t('PRÉ-VISITE CUISINE',22,175,16,true);
+ const fields=[['Date du jour de l’intervention :',22,207,225,520,date(f.date)],['Heure d’arrivée :',22,228,125,245,f.arrival],['Heure de départ :',386,228,545,200,f.departure],['Nom Prénom :',22,249,110,635,f.name],['Adresse :',22,270,85,660,f.address],['Code postal :',22,291,110,100,(f.city||'').match(/^\d{5}/)?.[0]||''],['Ville :',220,291,255,490,(f.city||'').replace(/^\d{5}\s*/,'')],['Tel :',22,312,56,690,f.phone],['E-mail :',22,333,75,670,f.email]];
+ fields.forEach(([l,x,y,vx,w,v])=>{t(l,x,y,12);ln(vx,y+13,w,true);fit(v,vx,y-1,w)});
+ t('POINTS DE CONTRÔLE',22,363,16,true);t('1. Vérification de la cohérence entre le plan CAO et la réalité',22,386,12);
+ function head(y){t('Conforme au',570,y,11,true);t('plan CAO',582,y+13,11,true);t('Non',699,y,11,true);t('Conforme',681,y+13,11,true)}head(380);
+ rect(22,420,177,120,gray);t('Plan de la cuisine',46,473,15);const rows=[426,442,458,474,490,506,522,538,648,664,680,696,712,728,744,760,776,792,808,824];const flat=groups.flatMap(g=>g[1]);const display=['Dimensions de la pièce','Dimension du plan de travail','Ouverture des fenêtres','Ouverture des meubles','Ouverture des portes','Ouverture des portes de l’électroménager','Dimensions des fileurs d’angle','Positionnement des installations techniques','Four','Plaque vitrocéramique / induction','Hotte','Lave-vaisselle','Réfrigérateur','Autres','Évier','Lave-vaisselle','Évier','Lave-vaisselle','Gaz de ville','Butane / propane'];
+ rows.forEach((y,i)=>{const label=display[i];t(label,208,y-9,12);const start=208+font.widthOfTextAtSize(label,12)+5;ln(start,y+3,Math.max(0,570-start),true);for(const[status,x]of [['Conforme',611],['Non conforme',714]]){page.drawCircle({x:x*k,y:H-y*k,size:6*k,borderColor:black,borderWidth:.7*k});if(s.checks[i].status===status){ln(x-3,y-3,0);page.drawLine({start:{x:(x-3)*k,y:H-(y-3)*k},end:{x:(x+3)*k,y:H-(y+3)*k},thickness:1.4*k,color:black});page.drawLine({start:{x:(x+3)*k,y:H-(y-3)*k},end:{x:(x-3)*k,y:H-(y+3)*k},thickness:1.4*k,color:black})}}
+ if(['Sans objet','Non vérifié'].includes(s.checks[i].status)){const val=s.checks[i].status;const width=font.widthOfTextAtSize(val,10)+8;rect(568-width,y-10,width,14,rgb(1,1,1));t(val,572-width,y-10,10)} });
+ t('En cas de non-conformité entre le plan CAO et la réalité, les modifications devront être indiquées sur le plan d’origine.',22,558,11);
+ t('2. Vérification de la conformité des installations techniques',22,600,12);head(600);
+ rect(22,640,177,96,gray);t('Arrivées électriques',31,678,14);rect(22,736,177,32,gray);t('Arrivées d’eau',49,744,14);rect(22,768,177,32,gray);t('Évacuation d’eau',38,776,14);rect(22,800,177,32,gray);t('Arrivée de gaz',46,808,14);
+ rect(22,839,736,129,rgb(1,1,1),true);ln(22,864,736);page.drawLine({start:{x:391*k,y:H-839*k},end:{x:391*k,y:H-968*k},color:black,thickness:.7*k});t('COMMENTAIRES INSTALLATEUR',31,844,15,true);t('COMMENTAIRES CLIENT',435,844,15,true);
+ const notes=s.checks.flatMap((a,i)=>a.note.trim()?[`${display[i]} : ${a.note.trim()}`]:[]);const meta=[f.tech?'Technicien : '+f.tech:'',f.reference&&f.reference!=='/'?'Dossier : '+f.reference:'',f.store&&f.store!=='/'?'Magasin : '+f.store:'',f.access&&f.access!=='/'?'Accès : '+f.access:''].filter(Boolean);
+ const installer=[...meta,...notes,f.installer||''].filter(Boolean).join('\n');comment(installer,29,871,353,89,'Commentaires installateur');comment(f.customer,399,871,351,89,'Commentaires client');
+ t('Conforama vous remercie de votre confiance et met tout en œuvre afin de vous donner entière satisfaction.',66,978,12);
+ t('Signature client :',68,1004,12);t('Veuillez porter la mention',68,1021,10);t('manuscrite « lu et approuvé »',68,1034,10);t('Date : '+date(f.date),68,1060,11);t('Signature installateur :',430,1004,12);
+ for(const[id,x]of [['sigClient',225],['sigTech',548]])if(s.signatures[id]){let im=await pdf.embedPng(s.signatures[id]);page.drawImage(im,{x:x*k,y:H-1069*k,width:195*k,height:65*k})}
+ rect(22,1090,474,7,rgb(.15,.15,.15));return new Blob([await pdf.save()],{type:'application/pdf'});
 }
 
 async function generatePdf(){if(sending)return;try{msg('Génération du PDF…');lastPdf=await buildPdf();download(filename()+'.pdf',lastPdf,'application/pdf');msg('PDF téléchargé. Aucun mail n’a été envoyé.')}catch(e){msg('PDF non généré : '+e.message)}}
